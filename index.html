@@ -1,151 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Invoice Maker</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 40px; }
-    h1 { text-align: center; }
-    .header { display: flex; justify-content: space-between; margin-bottom: 20px; }
-    .header .company { font-weight: bold; }
-    .invoice-to { margin-bottom: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    table, th, td { border: 1px solid #000; }
-    th, td { padding: 8px; text-align: center; }
-    .right { text-align: right; }
-    .total-section { margin-top: 20px; text-align: right; }
-    .buttons { margin-top: 20px; }
-    button { padding: 10px 15px; margin-right: 10px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Generator</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>Invoice</h1>
-  <div class="header">
-    <div class="company">
-      <div>My Company Pvt Ltd</div>
-      <div>ABN: 123456789</div>
-      <div>Email: info@company.com</div>
-      <div>Phone: +91 9876543210</div>
+    <div class="invoice-container">
+        <h2>Invoice</h2>
+        <div class="header">
+            <div class="issuer">
+                <p><strong>Name:</strong> Abdul Hameed Mohammad</p>
+                <p><strong>Email:</strong> hameedmohamed@icloud.com</p>
+                <p><strong>ABN:</strong> 45644603492</p>
+            </div>
+            <div class="invoice-details">
+                <p><strong>Invoice No:</strong> <span id="invoiceNo">1001</span></p>
+                <p><strong>Date:</strong> <span id="date">20/09/2025</span></p>
+            </div>
+        </div>
+        <div class="invoice-to">
+            <h3>INVOICE TO</h3>
+            <p><strong>Global Security Solution Pty Ltd</strong></p>
+            <p>03 5263 1628</p>
+            <p>accounts@gssvic.com.au</p>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Qty</th>
+                    <th>Unit Price ($)</th>
+                    <th>Amount ($)</th>
+                </tr>
+            </thead>
+            <tbody id="invoiceItems">
+                <tr>
+                    <td><input type="text" class="description" placeholder="Enter description"></td>
+                    <td><input type="number" class="quantity" min="1" value="1"></td>
+                    <td><input type="number" step="0.01" class="unit-price" min="0" value="0.00"></td>
+                    <td class="amount">0.00</td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr><td colspan="3"><strong>Subtotal</strong></td><td id="subtotal">0.00</td></tr>
+                <tr><td colspan="3"><strong>GST (10%)</strong></td><td id="gst">0.00</td></tr>
+                <tr><td colspan="3"><strong>Total</strong></td><td id="total">0.00</td></tr>
+            </tfoot>
+        </table>
+        <div class="terms">TERMS: 7 days</div>
+        <div class="total-words" id="totalWords"></div>
+        <button onclick="addItem()">Add Item</button>
+        <button onclick="generatePDF()">Generate PDF</button>
+        <button onclick="generateJPEG()">Generate JPEG</button>
     </div>
-    <div class="details">
-      <div>Invoice No: <input type="text" id="invoiceNo" value="001"></div>
-      <div>Date: <input type="date" id="invoiceDate" value=""></div>
-    </div>
-  </div>
-
-  <div class="invoice-to">
-    <label>Invoice To: </label>
-    <select id="invoiceTo">
-      <option>Global Security</option>
-    </select>
-  </div>
-
-  <table id="invoiceTable">
-    <thead>
-      <tr>
-        <th>Description</th>
-        <th>Qty</th>
-        <th>Rate</th>
-        <th>Amount</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><input type="text" placeholder="Item"></td>
-        <td><input type="number" value="1" min="1"></td>
-        <td><input type="number" value="0"></td>
-        <td class="right">0</td>
-      </tr>
-    </tbody>
-  </table>
-  <button onclick="addRow()">+ Add Item</button>
-
-  <div class="total-section">
-    <div>Subtotal: <span id="subtotal">0</span></div>
-    <div>GST (18%): <span id="gst">0</span></div>
-    <div><strong>Total: <span id="total">0</span></strong></div>
-    <div><em id="totalWords"></em></div>
-  </div>
-
-  <div class="buttons">
-    <button onclick="downloadPDF()">Download PDF</button>
-    <button onclick="downloadJPEG()">Download JPEG</button>
-  </div>
-
-  <!-- Scripts -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script>
-    const { jsPDF } = window.jspdf;
-
-    function addRow() {
-      const table = document.querySelector("#invoiceTable tbody");
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td><input type="text" placeholder="Item"></td>
-        <td><input type="number" value="1" min="1"></td>
-        <td><input type="number" value="0"></td>
-        <td class="right">0</td>
-      `;
-      table.appendChild(row);
-    }
-
-    function updateTotals() {
-      let subtotal = 0;
-      document.querySelectorAll("#invoiceTable tbody tr").forEach(row => {
-        const qty = row.cells[1].querySelector("input").value || 0;
-        const rate = row.cells[2].querySelector("input").value || 0;
-        const amount = qty * rate;
-        row.cells[3].innerText = amount.toFixed(2);
-        subtotal += amount;
-      });
-      const gst = subtotal * 0.18;
-      const total = subtotal + gst;
-      document.getElementById("subtotal").innerText = subtotal.toFixed(2);
-      document.getElementById("gst").innerText = gst.toFixed(2);
-      document.getElementById("total").innerText = total.toFixed(2);
-      document.getElementById("totalWords").innerText = numberToWords(Math.round(total)) + " only";
-    }
-
-    document.addEventListener("input", updateTotals);
-
-    function numberToWords(num) {
-      const a = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven',
-        'Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
-      const b = ['','', 'Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
-      if (num === 0) return 'Zero';
-      if (num < 20) return a[num];
-      if (num < 100) return b[Math.floor(num/10)] + (num%10 ? " " + a[num%10] : "");
-      if (num < 1000) return a[Math.floor(num/100)] + " Hundred " + numberToWords(num%100);
-      if (num < 100000) return numberToWords(Math.floor(num/1000)) + " Thousand " + numberToWords(num%1000);
-      if (num < 10000000) return numberToWords(Math.floor(num/100000)) + " Lakh " + numberToWords(num%100000);
-      return num;
-    }
-
-    function downloadPDF() {
-      html2canvas(document.body).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF("p", "mm", "a4");
-        const imgProps = pdf.getImageProperties(imgData);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-        pdf.save("invoice.pdf");
-      });
-    }
-
-    function downloadJPEG() {
-      html2canvas(document.body, { scale: 2 }).then(canvas => {
-        const link = document.createElement("a");
-        link.download = "invoice.jpg";
-        link.href = canvas.toDataURL("image/jpeg", 1.0);
-        link.click();
-      });
-    }
-
-    // Set default date today
-    document.getElementById("invoiceDate").valueAsDate = new Date();
-    updateTotals();
-  </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
