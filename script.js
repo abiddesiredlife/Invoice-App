@@ -8,7 +8,15 @@ function addItem() {
         <td class="amount">0.00</td>
     `;
     tbody.appendChild(row);
+    attachInputListeners();
     updateTotals();
+}
+
+function attachInputListeners() {
+    document.querySelectorAll('input').forEach(input => {
+        input.removeEventListener('input', updateTotals); // Prevent duplicates
+        input.addEventListener('input', updateTotals);
+    });
 }
 
 function updateTotals() {
@@ -25,19 +33,32 @@ function updateTotals() {
     document.getElementById('subtotal').textContent = subtotal.toFixed(2);
     document.getElementById('gst').textContent = gst.toFixed(2);
     document.getElementById('total').textContent = total.toFixed(2);
-    document.getElementById('totalWords').textContent = `Total in Words: ${numberToWords(total)} Dollars`;
+    document.getElementById('totalWords').textContent = `Total in Words: ${numberToWords(total)}`;
+}
+
+function convertLessThanHundred(num) {
+    const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+    const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    if (num === 0) return '';
+    if (num < 10) return units[num];
+    if (num < 20) return teens[num - 10];
+    const ten = Math.floor(num / 10);
+    const unit = num % 10;
+    return tens[ten] + (unit ? ' ' + units[unit] : '');
 }
 
 function numberToWords(num) {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
     const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
     const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-    const numStr = num.toString().split('.');
-    let whole = Math.floor(parseFloat(numStr[0]));
-    let decimal = numStr.length > 1 ? Math.round(parseFloat('0.' + numStr[1]) * 100) : 0;
+    const numStr = num.toFixed(2).split('.');
+    let whole = parseInt(numStr[0]);
+    let decimal = parseInt(numStr[1]) || 0;
     let words = '';
 
-    if (whole === 0) return 'Zero';
+    if (whole === 0 && decimal === 0) return 'Zero Dollars';
+
     if (whole >= 1000000) {
         words += numberToWords(Math.floor(whole / 1000000)) + ' Million ';
         whole %= 1000000;
@@ -51,40 +72,67 @@ function numberToWords(num) {
         whole %= 100;
     }
     if (whole > 0) {
-        if (whole < 10) words += units[whole];
-        else if (whole < 20) words += teens[whole - 10];
-        else {
-            words += tens[Math.floor(whole / 10)];
-            if (whole % 10 > 0) words += '-' + units[whole % 10];
-        }
+        words += convertLessThanHundred(whole);
     }
-    if (decimal > 0) words += ' and ' + units[decimal] + ' Cents';
+
+    if (words) words = words.trim() + ' Dollars';
+    if (decimal > 0) {
+        words += ' and ' + convertLessThanHundred(decimal) + ' Cents';
+    }
+
     return words.trim();
 }
 
-document.querySelectorAll('input').forEach(input => {
-    input.addEventListener('input', updateTotals);
-});
+attachInputListeners();
+updateTotals(); // Initial calculation
+
+function prepareStaticClone() {
+    const original = document.querySelector('.invoice-container');
+    const clone = original.cloneNode(true);
+    // Remove buttons
+    clone.querySelectorAll('button').forEach(btn => btn.remove());
+    // Replace inputs with text
+    clone.querySelectorAll('input').forEach(input => {
+        const span = document.createElement('span');
+        span.textContent = input.value;
+        span.style.display = 'inline-block';
+        span.style.width = '100%';
+        input.parentNode.replaceChild(span, input);
+    });
+    // Temporarily add to body (hidden) for rendering
+    clone.style.position = 'absolute';
+    clone.style.left = '-9999px';
+    document.body.appendChild(clone);
+    return clone;
+}
 
 function generatePDF() {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.html(document.querySelector('.invoice-container'), {
+    const doc = new jsPDF('p', 'pt', 'a4');
+    const clone = prepareStaticClone();
+    const opt = {
         callback: function (doc) {
             doc.save('invoice.pdf');
+            document.body.removeChild(clone); // Cleanup
         },
-        x: 10,
-        y: 10
-    });
+        margin: [40, 40, 40, 40],
+        autoPaging: 'text', // Better page splitting
+        html2canvas: {
+            scale: 2, // Higher quality
+            dpi: 300,
+            letterRendering: true
+        }
+    };
+    doc.html(clone, opt);
 }
 
 function generateJPEG() {
-    html2canvas(document.querySelector('.invoice-container')).then(canvas => {
+    const clone = prepareStaticClone();
+    html2canvas(clone, { scale: 2 }).then(canvas => { // HD scale
         const link = document.createElement('a');
         link.download = 'invoice.jpg';
-        link.href = canvas.toDataURL('image/jpeg', 1.0); // 1.0 for HD quality
+        link.href = canvas.toDataURL('image/jpeg', 1.0);
         link.click();
+        document.body.removeChild(clone); // Cleanup
     });
 }
-
-updateTotals(); // Initial calculation
