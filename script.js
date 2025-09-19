@@ -14,7 +14,7 @@ function addItem() {
 
 function attachInputListeners() {
     document.querySelectorAll('input').forEach(input => {
-        input.removeEventListener('input', updateTotals); // Prevent duplicates
+        input.removeEventListener('input', updateTotals);
         input.addEventListener('input', updateTotals);
     });
 }
@@ -75,7 +75,7 @@ function numberToWords(num) {
         words += convertLessThanHundred(whole);
     }
 
-    if (words) words = words.trim() + ' Dollars';
+    if (words) words += ' Dollars';
     if (decimal > 0) {
         words += ' and ' + convertLessThanHundred(decimal) + ' Cents';
     }
@@ -84,7 +84,7 @@ function numberToWords(num) {
 }
 
 attachInputListeners();
-updateTotals(); // Initial calculation
+updateTotals();
 
 function prepareStaticClone() {
     const original = document.querySelector('.invoice-container');
@@ -94,33 +94,41 @@ function prepareStaticClone() {
     // Replace inputs with text
     clone.querySelectorAll('input').forEach(input => {
         const span = document.createElement('span');
-        span.textContent = input.value;
+        span.textContent = input.value || 'N/A';
         span.style.display = 'inline-block';
         span.style.width = '100%';
+        span.style.padding = '5px';
         input.parentNode.replaceChild(span, input);
     });
-    // Temporarily add to body (hidden) for rendering
-    clone.style.position = 'absolute';
-    clone.style.left = '-9999px';
-    document.body.appendChild(clone);
+    // Ensure table headers are included
+    const thead = clone.querySelector('thead');
+    if (!thead) {
+        const table = clone.querySelector('table');
+        const newThead = document.createElement('thead');
+        newThead.innerHTML = `<tr><th>Description</th><th>Qty</th><th>Unit Price ($)</th><th>Amount ($)</th></tr>`;
+        table.insertBefore(newThead, table.firstChild);
+    }
+    // Add border to table for clarity
+    clone.querySelector('table').style.border = '1px solid #000';
     return clone;
 }
 
 function generatePDF() {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('p', 'pt', 'a4');
+    const doc = new jsPDF('p', 'pt', 'a4', true); // true for compress
     const clone = prepareStaticClone();
     const opt = {
         callback: function (doc) {
             doc.save('invoice.pdf');
-            document.body.removeChild(clone); // Cleanup
+            document.body.removeChild(clone);
         },
         margin: [40, 40, 40, 40],
-        autoPaging: 'text', // Better page splitting
+        autoPaging: 'text',
         html2canvas: {
-            scale: 2, // Higher quality
+            scale: 2,
             dpi: 300,
-            letterRendering: true
+            letterRendering: true,
+            useCORS: true
         }
     };
     doc.html(clone, opt);
@@ -128,11 +136,11 @@ function generatePDF() {
 
 function generateJPEG() {
     const clone = prepareStaticClone();
-    html2canvas(clone, { scale: 2 }).then(canvas => { // HD scale
+    html2canvas(clone, { scale: 2, useCORS: true }).then(canvas => {
         const link = document.createElement('a');
         link.download = 'invoice.jpg';
         link.href = canvas.toDataURL('image/jpeg', 1.0);
         link.click();
-        document.body.removeChild(clone); // Cleanup
+        document.body.removeChild(clone);
     });
 }
