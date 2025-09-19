@@ -2,6 +2,11 @@
     width: 800px;
     margin: 20px auto;
     font-family: Arial, sans-serif;
+    border: 1px solid #000; /* Added page-like border */
+    padding: 20px; /* Inner padding for better boundaries */
+}
+h2 {
+    text-align: center; /* Center the Invoice title */
 }
 .header, .invoice-to {
     border: 1px solid #000;
