@@ -36,22 +36,24 @@ function updateTotals() {
     document.getElementById('totalWords').textContent = `Total in Words: ${numberToWords(total)}`;
 }
 
-function convertLessThanHundred(num) {
+function convertLessThanThousand(num) {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
     const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
     const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
     if (num === 0) return '';
     if (num < 10) return units[num];
     if (num < 20) return teens[num - 10];
-    const ten = Math.floor(num / 10);
-    const unit = num % 10;
-    return tens[ten] + (unit ? ' ' + units[unit] : '');
+    if (num < 100) {
+        const ten = Math.floor(num / 10);
+        const unit = num % 10;
+        return tens[ten] + (unit ? '-' + units[unit] : '');
+    }
+    const hundred = Math.floor(num / 100);
+    const remainder = num % 100;
+    return units[hundred] + ' Hundred' + (remainder ? ' ' + convertLessThanThousand(remainder) : '');
 }
 
 function numberToWords(num) {
-    const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-    const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
     const numStr = num.toFixed(2).split('.');
     let whole = parseInt(numStr[0]);
     let decimal = parseInt(numStr[1]) || 0;
@@ -64,23 +66,18 @@ function numberToWords(num) {
         whole %= 1000000;
     }
     if (whole >= 1000) {
-        words += numberToWords(Math.floor(whole / 1000)) + ' Thousand ';
+        const thousands = Math.floor(whole / 1000);
+        words += convertLessThanThousand(thousands) + ' Thousand ';
         whole %= 1000;
     }
-    if (whole >= 100) {
-        words += numberToWords(Math.floor(whole / 100)) + ' Hundred ';
-        whole %= 100;
-    }
     if (whole > 0) {
-        words += convertLessThanHundred(whole);
+        words += convertLessThanThousand(whole) + ' Dollars';
     }
-
-    if (words) words += ' Dollars';
     if (decimal > 0) {
-        words += ' and ' + convertLessThanHundred(decimal) + ' Cents';
+        words += ' and ' + convertLessThanThousand(decimal) + ' Cents';
     }
 
-    return words.trim();
+    return words.trim().replace(/-$/,''); // Remove trailing hyphen if present
 }
 
 attachInputListeners();
@@ -91,6 +88,14 @@ function prepareStaticClone() {
     const clone = original.cloneNode(true);
     // Remove buttons
     clone.querySelectorAll('button').forEach(btn => btn.remove());
+    // Populate INVOICE TO section
+    const invoiceTo = clone.querySelector('.invoice-to');
+    invoiceTo.innerHTML = `
+        <h3>INVOICE TO</h3>
+        <p><strong>Global Security Solution Pty Ltd</strong></p>
+        <p>03 5263 1628</p>
+        <p>accounts@gssvic.com.au</p>
+    `;
     // Rebuild table with all data
     const tbody = clone.querySelector('tbody');
     const newTbody = document.createElement('tbody');
@@ -106,7 +111,7 @@ function prepareStaticClone() {
             <td>${price.toFixed(2)}</td>
             <td>${amount.toFixed(2)}</td>
         `;
-        newRow.style.pageBreakInside = 'avoid'; // Prevent row splitting
+        newRow.style.pageBreakInside = 'avoid';
         newTbody.appendChild(newRow);
     });
     tbody.parentNode.replaceChild(newTbody, tbody);
@@ -130,11 +135,12 @@ function prepareStaticClone() {
     // Add borders
     clone.querySelector('table').style.border = '1px solid #000';
     clone.style.border = '1px solid #000';
-    // Add style to prevent page breaks inside rows
+    // Add style to prevent page breaks
     const style = document.createElement('style');
     style.innerHTML = `
         tr, td, th { page-break-inside: avoid; }
         table { width: 100%; }
+        .invoice-container { font-size: 10pt; }
     `;
     clone.appendChild(style);
     return clone;
@@ -149,20 +155,18 @@ function generatePDF() {
         compress: true
     });
     const clone = prepareStaticClone();
-    clone.style.width = '750px'; // A4 width in points approx.
+    clone.style.width = '750px'; // A4 width approx.
     clone.style.position = 'absolute';
     clone.style.left = '-9999px';
     document.body.appendChild(clone);
-    // Force layout reflow
-    clone.offsetHeight;
-    const opt = {
-        callback: function (doc) {
-            doc.save('invoice.pdf');
-            document.body.removeChild(clone);
-        },
-        margin: [30, 30, 30, 30], // Reduced margins to fit more content
-        autoPaging: 'text',
-        html2canvas: {
+    // Force layout reflow and wait for rendering
+    setTimeout(() => {
+        console.log('Clone dimensions:', clone.offsetWidth, clone.scrollHeight);
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = clone.offsetWidth * 2; // Double for higher resolution
+        canvas.height = clone.scrollHeight * 2;
+        html2canvas(clone, {
             scale: 2,
             dpi: 300,
             letterRendering: true,
@@ -170,10 +174,21 @@ function generatePDF() {
             width: clone.offsetWidth,
             height: clone.scrollHeight,
             windowWidth: clone.offsetWidth,
-            windowHeight: clone.scrollHeight
-        }
-    };
-    doc.html(clone, opt).catch(error => console.error('PDF Generation Error:', error));
+            windowHeight: clone.scrollHeight,
+            logging: true
+        }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const imgProps = doc.getImageProperties(imgData);
+            const pdfWidth = doc.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            doc.save('invoice.pdf');
+            document.body.removeChild(clone);
+        }).catch(error => {
+            console.error('PDF Generation Error:', error);
+            alert('PDF generation failed. Check console for details.');
+        });
+    }, 100); // Delay to ensure DOM is ready
 }
 
 function generateJPEG() {
@@ -182,8 +197,7 @@ function generateJPEG() {
     clone.style.position = 'absolute';
     clone.style.left = '-9999px';
     document.body.appendChild(clone);
-    // Force layout reflow
-    clone.offsetHeight;
+    clone.offsetHeight; // Force reflow
     html2canvas(clone, {
         scale: 2,
         useCORS: true,
@@ -191,7 +205,7 @@ function generateJPEG() {
         height: clone.scrollHeight,
         windowWidth: clone.offsetWidth,
         windowHeight: clone.scrollHeight,
-        logging: true // Enable logging for debugging
+        logging: true
     }).then(canvas => {
         const link = document.createElement('a');
         link.download = 'invoice.jpg';
@@ -200,6 +214,6 @@ function generateJPEG() {
         document.body.removeChild(clone);
     }).catch(error => {
         console.error('JPEG Generation Failed:', error);
-        alert('JPEG generation failed. Check browser console for details.');
+        alert('JPEG generation failed. Check console for details.');
     });
-}
+            }
