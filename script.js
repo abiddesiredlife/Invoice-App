@@ -1,3 +1,11 @@
+window.onload = function() {
+    let lastInvoice = localStorage.getItem('lastInvoice') || 1000;
+    document.getElementById('invoiceNo').value = parseInt(lastInvoice) + 1;
+    document.getElementById('date').textContent = new Date().toLocaleDateString('en-GB');
+    attachInputListeners();
+    updateTotals();
+};
+
 function addItem() {
     const tbody = document.getElementById('invoiceItems');
     const row = document.createElement('tr');
@@ -43,24 +51,22 @@ function convertLessThanThousand(num) {
     if (num === 0) return '';
     if (num < 10) return units[num];
     if (num < 20) return teens[num - 10];
-    if (num < 100) {
-        const ten = Math.floor(num / 10);
-        const unit = num % 10;
-        return tens[ten] + (unit ? ' ' + units[unit] : '');
-    }
+    const ten = Math.floor(num / 10);
+    const unit = num % 10;
+    let str = tens[ten];
+    if (unit > 0) str += ' ' + units[unit];
+    if (num < 100) return str;
     const hundred = Math.floor(num / 100);
     const remainder = num % 100;
-    return units[hundred] + ' Hundred' + (remainder ? ' ' + convertLessThanThousand(remainder) : '');
+    str = units[hundred] + ' Hundred';
+    if (remainder > 0) str += ' ' + convertLessThanThousand(remainder);
+    return str;
 }
 
 function getWords(num) {
     if (num === 0) return '';
-    if (num >= 1000000) {
-        return getWords(Math.floor(num / 1000000)) + ' Million ' + getWords(num % 1000000);
-    }
-    if (num >= 1000) {
-        return getWords(Math.floor(num / 1000)) + ' Thousand ' + getWords(num % 1000);
-    }
+    if (num >= 1000000) return getWords(Math.floor(num / 1000000)) + ' Million ' + getWords(num % 1000000);
+    if (num >= 1000) return getWords(Math.floor(num / 1000)) + ' Thousand ' + getWords(num % 1000);
     return convertLessThanThousand(num);
 }
 
@@ -70,21 +76,15 @@ function numberToWords(num) {
     let decimal = parseInt(numStr[1]) || 0;
     let words = getWords(whole);
     if (words) words += ' Dollars';
-    if (decimal > 0) {
-        words += ' and ' + getWords(decimal) + ' Cents';
-    }
+    if (decimal > 0) words += ' and ' + getWords(decimal) + ' Cents';
     return words.trim();
 }
-
-attachInputListeners();
-updateTotals();
 
 function prepareStaticClone() {
     const original = document.querySelector('.invoice-container');
     const clone = original.cloneNode(true);
-    // Remove buttons
     clone.querySelectorAll('button').forEach(btn => btn.remove());
-    // Ensure INVOICE TO section
+    clone.querySelector('#invoiceNo').outerHTML = clone.querySelector('#invoiceNo').value; // Replace input with text
     const invoiceTo = clone.querySelector('.invoice-to');
     invoiceTo.innerHTML = `
         <h3>INVOICE TO</h3>
@@ -92,7 +92,6 @@ function prepareStaticClone() {
         <p>03 5263 1628</p>
         <p>accounts@gssvic.com.au</p>
     `;
-    // Rebuild table with all data
     const tbody = clone.querySelector('#invoiceItems');
     const newTbody = document.createElement('tbody');
     document.querySelectorAll('#invoiceItems tr').forEach((row) => {
@@ -107,11 +106,9 @@ function prepareStaticClone() {
             <td>${price.toFixed(2)}</td>
             <td>${amount.toFixed(2)}</td>
         `;
-        newRow.style.pageBreakInside = 'avoid';
         newTbody.appendChild(newRow);
     });
     tbody.parentNode.replaceChild(newTbody, tbody);
-    // Ensure table headers
     const table = clone.querySelector('table');
     let thead = clone.querySelector('thead');
     if (!thead) {
@@ -119,8 +116,6 @@ function prepareStaticClone() {
         table.insertBefore(thead, table.firstChild);
     }
     thead.innerHTML = `<tr><th>Description</th><th>Qty</th><th>Unit Price ($)</th><th>Amount ($)</th></tr>`;
-    thead.querySelectorAll('th').forEach(th => th.style.pageBreakInside = 'avoid');
-    // Update totals
     const subtotal = parseFloat(document.getElementById('subtotal').textContent) || 0;
     const gst = parseFloat(document.getElementById('gst').textContent) || 0;
     const total = parseFloat(document.getElementById('total').textContent) || 0;
@@ -128,16 +123,18 @@ function prepareStaticClone() {
     clone.querySelector('#gst').textContent = gst.toFixed(2);
     clone.querySelector('#total').textContent = total.toFixed(2);
     clone.querySelector('#totalWords').textContent = `Total in Words: ${numberToWords(total)}`;
-    // Add borders and styles
     table.style.border = '1px solid #000';
     clone.style.border = '1px solid #000';
     const style = document.createElement('style');
     style.innerHTML = `
         tr, td, th { page-break-inside: avoid; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #000; padding: 8px; }
-        h3 { margin-bottom: 10px; }
-        .invoice-container { font-size: 12pt; font-family: Arial, sans-serif; }
+        th, td { border: 1px solid #000; padding: 5px; line-height: 1.2; text-align: center; }
+        h2, h3 { margin: 5px 0; }
+        p { margin: 3px 0; }
+        .invoice-container { font-size: 10pt; font-family: Arial, sans-serif; padding: 10px; margin: 0; }
+        .header, .invoice-to { padding: 5px; margin-bottom: 5px; }
+        .terms, .total-words { margin: 5px 0; }
     `;
     clone.appendChild(style);
     return clone;
@@ -151,44 +148,46 @@ function generatePDF() {
         format: 'a4',
         compress: true
     });
-    const margin = 40;
+    const margin = 20;
     const pdfWidth = doc.internal.pageSize.getWidth() - 2 * margin;
-    const pdfHeight = doc.internal.pageSize.getHeight() - 2 * margin;
+    const pdfPageHeight = doc.internal.pageSize.getHeight() - 2 * margin;
+    const scale = 2;
     const clone = prepareStaticClone();
-    clone.style.width = `${pdfWidth}px`; // Fit to PDF width
+    clone.style.width = `${pdfWidth}px`;
     clone.style.position = 'absolute';
     clone.style.left = '-9999px';
     document.body.appendChild(clone);
     setTimeout(() => {
         html2canvas(clone, {
-            scale: 2,
+            scale: scale,
             useCORS: true,
             width: clone.offsetWidth,
             height: clone.scrollHeight,
             logging: true
         }).then(canvas => {
             const imgData = canvas.toDataURL('image/png');
-            const imgWidth = canvas.width / 2; // Adjust for scale
-            const imgHeight = canvas.height / 2;
+            const imgWidth = clone.offsetWidth;
+            const imgHeight = clone.scrollHeight;
             const ratio = pdfWidth / imgWidth;
             const scaledImgHeight = imgHeight * ratio;
-            let positionY = 0;
-            let heightLeft = scaledImgHeight;
-            doc.addImage(imgData, 'PNG', margin, margin + positionY, pdfWidth, scaledImgHeight);
-            heightLeft -= pdfHeight;
-            while (heightLeft > 0) {
-                positionY = heightLeft - scaledImgHeight;
+            let y = 0;
+            while (y < scaledImgHeight) {
                 doc.addPage();
-                doc.addImage(imgData, 'PNG', margin, margin + positionY, pdfWidth, scaledImgHeight);
-                heightLeft -= pdfHeight;
+                const h = Math.min(pdfPageHeight, scaledImgHeight - y);
+                const sourceY = (y / ratio);
+                const sourceH = (h / ratio);
+                doc.addImage(imgData, 'PNG', margin, margin, pdfWidth, h, undefined, 'FAST', 0, sourceY, canvas.width, sourceH * scale);
+                y += h;
             }
+            doc.deletePage(1); // Remove initial blank page if present
             doc.save('invoice.pdf');
+            localStorage.setItem('lastInvoice', document.getElementById('invoiceNo').value);
             document.body.removeChild(clone);
         }).catch(error => {
             console.error('PDF Generation Error:', error);
             alert('PDF generation failed. Check console for details.');
         });
-    }, 500); // Increased delay for rendering
+    }, 1000); // Increased delay for complex rendering
 }
 
 function generateJPEG() {
@@ -213,4 +212,4 @@ function generateJPEG() {
         console.error('JPEG Generation Failed:', error);
         alert('JPEG generation failed. Check console for details.');
     });
-            }
+}
