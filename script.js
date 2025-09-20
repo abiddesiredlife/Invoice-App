@@ -91,16 +91,25 @@ function prepareStaticClone() {
     const clone = original.cloneNode(true);
     // Remove buttons
     clone.querySelectorAll('button').forEach(btn => btn.remove());
-    // Replace inputs with text
-    clone.querySelectorAll('input').forEach(input => {
-        const span = document.createElement('span');
-        span.textContent = input.value || 'N/A';
-        span.style.display = 'inline-block';
-        span.style.width = '100%';
-        span.style.padding = '5px';
-        input.parentNode.replaceChild(span, input);
+    // Replace inputs with text and rebuild table structure
+    const tbody = clone.querySelector('tbody');
+    const newTbody = document.createElement('tbody');
+    document.querySelectorAll('#invoiceItems tr').forEach((row, index) => {
+        const desc = row.querySelector('.description').value || 'N/A';
+        const qty = parseFloat(row.querySelector('.quantity').value) || 0;
+        const price = parseFloat(row.querySelector('.unit-price').value) || 0;
+        const amount = qty * price;
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+            <td>${desc}</td>
+            <td>${qty}</td>
+            <td>${price.toFixed(2)}</td>
+            <td>${amount.toFixed(2)}</td>
+        `;
+        newTbody.appendChild(newRow);
     });
-    // Ensure table headers are included
+    tbody.parentNode.replaceChild(newTbody, tbody);
+    // Ensure table headers
     const thead = clone.querySelector('thead');
     if (!thead) {
         const table = clone.querySelector('table');
@@ -108,15 +117,31 @@ function prepareStaticClone() {
         newThead.innerHTML = `<tr><th>Description</th><th>Qty</th><th>Unit Price ($)</th><th>Amount ($)</th></tr>`;
         table.insertBefore(newThead, table.firstChild);
     }
-    // Add border to table for clarity
+    // Update totals in clone
+    const subtotal = parseFloat(document.getElementById('subtotal').textContent) || 0;
+    const gst = parseFloat(document.getElementById('gst').textContent) || 0;
+    const total = parseFloat(document.getElementById('total').textContent) || 0;
+    clone.querySelector('#subtotal').textContent = subtotal.toFixed(2);
+    clone.querySelector('#gst').textContent = gst.toFixed(2);
+    clone.querySelector('#total').textContent = total.toFixed(2);
+    clone.querySelector('#totalWords').textContent = `Total in Words: ${numberToWords(total)}`;
+    // Add border to table
     clone.querySelector('table').style.border = '1px solid #000';
+    clone.style.border = '1px solid #000'; // Outer border
     return clone;
 }
 
 function generatePDF() {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('p', 'pt', 'a4', true); // true for compress
+    const doc = new jsPDF({
+        orientation: 'p',
+        unit: 'pt',
+        format: 'a4',
+        compress: true
+    });
     const clone = prepareStaticClone();
+    clone.style.width = '750px'; // Adjust to fit A4
+    document.body.appendChild(clone);
     const opt = {
         callback: function (doc) {
             doc.save('invoice.pdf');
@@ -128,19 +153,30 @@ function generatePDF() {
             scale: 2,
             dpi: 300,
             letterRendering: true,
-            useCORS: true
+            useCORS: true,
+            width: 750 // Match A4 width in points
         }
     };
-    doc.html(clone, opt);
+    doc.html(clone, opt).then(() => document.body.removeChild(clone));
 }
 
 function generateJPEG() {
     const clone = prepareStaticClone();
-    html2canvas(clone, { scale: 2, useCORS: true }).then(canvas => {
+    clone.style.width = '750px'; // Match A4 width
+    document.body.appendChild(clone);
+    html2canvas(clone, {
+        scale: 2,
+        useCORS: true,
+        width: 750,
+        windowWidth: 750
+    }).then(canvas => {
         const link = document.createElement('a');
         link.download = 'invoice.jpg';
         link.href = canvas.toDataURL('image/jpeg', 1.0);
         link.click();
         document.body.removeChild(clone);
+    }).catch(error => {
+        console.error('JPEG Generation Failed:', error);
+        alert('Failed to generate JPEG. Check console for details.');
     });
 }
