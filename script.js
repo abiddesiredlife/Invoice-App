@@ -1,7 +1,6 @@
 window.onload = function() {
     let lastInvoice = localStorage.getItem('lastInvoice') || 1000;
     document.getElementById('invoiceNo').value = parseInt(lastInvoice) + 1;
-    document.getElementById('date').textContent = new Date().toLocaleDateString('en-GB');
     attachInputListeners();
     updateTotals();
 };
@@ -84,7 +83,8 @@ function prepareStaticClone() {
     const original = document.querySelector('.invoice-container');
     const clone = original.cloneNode(true);
     clone.querySelectorAll('button').forEach(btn => btn.remove());
-    clone.querySelector('#invoiceNo').outerHTML = clone.querySelector('#invoiceNo').value; // Replace input with text
+    clone.querySelector('#invoiceNo').outerHTML = `<span>${clone.querySelector('#invoiceNo').value}</span>`;
+    clone.querySelector('#date').outerHTML = `<span>${clone.querySelector('#date').value}</span>`;
     const invoiceTo = clone.querySelector('.invoice-to');
     invoiceTo.innerHTML = `
         <h3>INVOICE TO</h3>
